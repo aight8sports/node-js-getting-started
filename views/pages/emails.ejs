@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <%- include ("../partials/header.ejs") %>
+</head>
+
+  <body>
+    <%- include ("../partials/nav.ejs") %>
+
+    <div class="card" id="mail-app">
+      <div class="card-header">
+        Mailslurp
+        <span class="btn btn-sm btn-outline-primary float-end new-inbox" v-on:click="newInbox()">+ New Inbox</span>
+      </div>
+      
+      <div class="card-body">
+        <div class="card" v-for="inbox in inboxes">
+          <!-- <div class="card-header"></div> -->
+          <div class="card-header d-flex w-100 justify-content-between">
+            <div>
+              <span class="ptr" v-on:click="openInbox(inbox)" >{{inbox.id}}</span>
+              | <span class="badge bg-secondary">{{timeAgo(inbox.createdAt)}}</span>
+              | <span class="badge bg-secondary">{{inbox.name}}</span>
+            </div>
+            <div>
+              <div class="btn-group">
+                <span class="btn btn-outline-primary btn-xs" v-on:click="copyToClipboard(inbox.emailAddress)">Copy</span>
+                <button class="btn btn-outline-primary btn-xs dropdown-toggle" type="button" id="defaultDropdown" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false">
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="defaultDropdown">
+                  <li><a class="dropdown-item" href="#" v-on:click="deleteInbox(inbox)">Delete</a></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div class="card-body" v-if="inbox.open">
+            <div class="list-group">
+              <div v-for="email in inbox.emails" class="list-group-item list-group-item-action" aria-current="true">
+                <div class="d-flex w-100 justify-content-between" v-on:click="openEmail(email)">
+                  <strong class="mb-1 ptr">{{email.subject}}</strong>
+                  <small>{{timeAgo(email.createdAt)}}</small>
+                </div>
+                <small>{{email.from}} {{email.open}}</small>
+                <p class="mb-1" v-html="email.body"></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+
+      /****** Application ******/
+      var mailapp = new Vue({
+        el: '#mail-app',
+        // data: { inboxes },
+        data () {
+        return {
+          inboxes: [],
+          newInbox() {
+            let name = prompt("Please enter email name:", "Carrefour");
+            $.post('/mail/emails', { name }, (inbox) => {
+              showSuccess("Email cretaed")
+              this.inboxes.unshift(inbox)
+              this.copyToClipboard(inbox.emailAddress)
+            })
+          },
+          openInbox(inbox) {
+            if(inbox.emails && inbox.open) return inbox.open = false;
+            $.get('/mail/emails?id='+inbox.id, (emails) => {
+              inbox.open = true;
+              inbox.emails = emails.map(email => { email.body = ''; email.open=false; return email })
+            })
+          },
+          openEmail(email) {
+            if(email.open) {
+              email.open = false;
+              email._body = email.body
+              email.body = ''
+            }
+            else if(email._body) {
+              email.body = email._body
+              email.open = true;
+            }
+            else {
+              $.get('/mail/emails?email='+email.id, (data) => {
+                email.body = data.body
+                email.open = true;
+              })
+            }
+          },
+          deleteInbox(inbox) {
+            $.ajax({url: '/mail/emails?id='+inbox.id, type: 'DELETE', success: (result) => {
+              console.log('Done')
+              setTimeout(() => showSuccess("Email deleted successfully"), 1000)
+              this.inboxes.splice(this.inboxes.indexOf(inbox), 1)
+            }});
+          },
+          timeAgo(date) {
+            var seconds = Math.floor((new Date() - new Date(date)) / 1000);
+            var interval = seconds / 31536000;
+            if (interval > 1) return Math.floor(interval) + " years";
+            interval = seconds / 2592000;
+            if (interval > 1) return Math.floor(interval) + " months";
+            interval = seconds / 86400;
+            if (interval > 1) return Math.floor(interval) + " days";
+            interval = seconds / 3600;
+            if (interval > 1) return Math.floor(interval) + " hours";
+            interval = seconds / 60;
+            if (interval > 1) return Math.floor(interval) + " minutes";
+            return Math.floor(seconds) + " seconds";
+          },
+          copyToClipboard(text) {
+            var sampleTextarea = document.createElement("textarea");
+            document.body.appendChild(sampleTextarea);
+            sampleTextarea.value = text; //save main text in it
+            sampleTextarea.select(); //select textarea contenrs
+            document.execCommand("copy");
+            document.body.removeChild(sampleTextarea);
+            showSuccess("Copied ...!")
+          }
+        }
+      },
+      mounted () {
+        $.get('/mail/emails', (data) => {
+          this.inboxes = data.map(inb => {inb.emails = []; inb.open = false; return inb;})
+        })
+      }
+      })
+    </script>
+  </body>
+</html>
